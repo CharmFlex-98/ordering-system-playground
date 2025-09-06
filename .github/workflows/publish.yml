@@ -2,9 +2,6 @@ name: Flutter Android Release Build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 jobs:
   build:
