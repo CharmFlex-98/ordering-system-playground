@@ -1,107 +1,246 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ordering_system/orderViewModel.dart';
+
+import 'models/order_view_state.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Order System',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: const MyHomePage(title: 'Order System'),
+      home: const MyHomePage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MyHomePage extends ConsumerWidget {
+  const MyHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(orderStateProvider);
+    final viewModel = ref.read(orderStateProvider.notifier);
+
+    final idleBots = state.bots
+        .where((bot) => bot.isIdle)
+        .toList(growable: false);
+
+    final processingOrders = state.processingOrders;
+    final pendingOrders = state.pendingOrders;
+    final completedOrders = state.completedTasks;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: const Text("Order System"),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Row(
+              children: [
+                RestaurantConditionLane<OrderTask>(
+                  items: processingOrders,
+                  areaText: "PENDING (processing)",
+                  laneBuilder: (child) => ProcessingOrderCard(order: child)
+                ),
+                SizedBox(width: 8,),
+                RestaurantConditionLane<Bot>(
+                  items: idleBots,
+                  areaText: "IDLE BOTs",
+                  laneBuilder: (child) => BotCard(bot: child),
+                ),
+              ],
+            ),
+          ),
+
+          Expanded(
+            flex: 5,
+            child: Container(
+              color: Colors.grey,
+              child: Column(
+                children: [
+                  OrderLane(orders: pendingOrders),
+                  Divider(),
+                  Text(style: TextStyle(fontSize: 11), "PENDING"),
+                  Text(style: TextStyle(fontSize: 11), "COMPLETED"),
+                  Divider(),
+                  OrderLane(orders: completedOrders),
+                ],
+              ),
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                MyButton(text: "+ bot", onClicked: viewModel.onAddBot),
+                MyButton(text: "- bot", onClicked: viewModel.onRemoveNewestBot),
+                MyButton(
+                  text: "New VIP order",
+                  onClicked: () => viewModel.onAddOrder(
+                    Customer(priority: CustomerPriority.vip),
+                  ),
+                ),
+                MyButton(
+                  text: "New Normal order",
+                  onClicked: () => viewModel.onAddOrder(
+                    Customer(priority: CustomerPriority.normal),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class ProcessingOrderCard extends StatelessWidget {
+  final OrderTask order;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  const ProcessingOrderCard({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
+    final botId = order.handler?.employeeId ?? -1;
+
+    String priority = order.orderedBy.priority == CustomerPriority.normal
+        ? "Normal"
+        : "VIP";
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 3,
+      child: ListTile(
+        leading: CircularProgressIndicator(),
+        title: Text("Order ${order.orderId}, $priority"),
+        subtitle: Text("Bot: ${botId}"),
       ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+    );
+  }
+}
+
+class BotCard extends StatelessWidget {
+  final Bot bot;
+
+  const BotCard({super.key, required this.bot});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      elevation: 3,
+      child: ListTile(
+        title: const Text("Bot"),
+        subtitle: Text("id: ${bot.employeeId}"),
+      ),
+    );
+  }
+}
+
+class OrderCard extends StatelessWidget {
+  final OrderTask order;
+
+  const OrderCard({super.key, required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    String customer = order.orderedBy.priority == CustomerPriority.vip
+        ? "VIP"
+        : "Normal";
+    return Container(
+      color: Colors.white,
+      padding: EdgeInsets.all(10),
+      margin: EdgeInsets.all(5),
+      child: Column(
+        children: [
+          const Icon(Icons.task),
+          const Text("Order"),
+          Text("id: ${order.orderId}, type: $customer"),
+        ],
+      ),
+    );
+  }
+}
+
+class OrderLane extends StatelessWidget {
+  final List<OrderTask> orders;
+
+  const OrderLane({super.key, required this.orders});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Center(
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: orders.length,
+          itemBuilder: (context, index) {
+            return OrderCard(order: orders[index]);
+          },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+}
+
+class MyButton extends StatelessWidget {
+  final VoidCallback onClicked;
+  final String text;
+
+  const MyButton({super.key, required this.text, required this.onClicked});
+
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: () {
+        onClicked();
+      },
+      child: Text(style: TextStyle(fontSize: 11), text),
+    );
+  }
+}
+
+class RestaurantConditionLane<T> extends StatelessWidget {
+  final String areaText;
+  final Widget Function(T)  laneBuilder;
+  final List<T> items;
+
+  const RestaurantConditionLane({
+    super.key,
+    required this.items,
+    required this.areaText,
+    required this.laneBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(child: Container(
+      color: Colors.grey[200],
+      child: Column(
+        children: [
+          Padding(padding: EdgeInsets.all(8.0), child: Text(areaText)),
+          Expanded(child: ListView.builder(
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              return laneBuilder(items[index]);
+            },
+          ),),
+        ],
+      ),
+    ));
   }
 }
